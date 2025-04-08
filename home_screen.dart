@@ -1,6 +1,7 @@
+// home_screen.dart
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'db_helper.dart';
+import 'form_screen.dart';
 import 'api_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -9,225 +10,156 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<Map<String, dynamic>> records = [];
+  List<Map<String, dynamic>> formData = [];
+  List<Map<String, dynamic>> apiData = [];
   bool isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    loadDataFromDb();
+    _loadLocalData();
   }
 
-  Future<void> loadDataFromDb() async {
+  Future<void> _loadLocalData() async {
     setState(() => isLoading = true);
-    final data = await DBHelper.fetchAllData();
-    setState(() {
-      records = data;
-      isLoading = false;
-    });
-
-    if (records.isEmpty) {
-      await ApiService.fetchAndStoreData();
-      final newData = await DBHelper.fetchAllData();
-      setState(() {
-        records = newData;
-      });
+    try {
+      formData = await DbHelper.fetchSubjectData();
+      setState(() {});
+    } catch (e) {
+      _showError('Error loading local data: $e');
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
-  Future<void> deleteRecord(int id) async {
-    await DBHelper.deleteRecord(id);
-    setState(() {
-      records.removeWhere((record) => record['id'] == id);
-    });
+  Future<void> _loadApiData() async {
+    setState(() => isLoading = true);
+    try {
+      apiData = await ApiService.fetchData();
+      setState(() {});
+      _showSuccess('API data loaded successfully');
+    } catch (e) {
+      _showError('Error loading API data: $e');
+    } finally {
+      setState(() => isLoading = false);
+    }
   }
 
-  Future<void> eraseAllData() async {
-    bool confirmDelete = await showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Text(
-              "Delete All Records?",
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-            ),
-            content: Text(
-              "This action cannot be undone.",
-              style: GoogleFonts.poppins(),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(
-                  "Cancel",
-                  style: GoogleFonts.poppins(color: Colors.grey),
-                ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(
-                  "Delete",
-                  style: GoogleFonts.poppins(
-                    color: Colors.red,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
+  Future<void> _eraseData() async {
+    await DbHelper.deleteAllData();
+    setState(() => formData = []);
+    _showSuccess('All local data erased');
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
+  }
 
-    if (confirmDelete == true) {
-      await DBHelper.deleteAllRecords();
-      setState(() {
-        records.clear();
-      });
-    }
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Text(
-          'Grade Records',
-          style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.deepPurpleAccent,
-        centerTitle: true,
-        elevation: 5,
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: loadDataFromDb,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
-                  child: Text(
-                    'Load Data',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: eraseAllData,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
-                  child: Text(
-                    'Erase Data',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child:
-                records.isEmpty
-                    ? Center(
-                      child: Text(
-                        'No Data Available',
-                        style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          color: Colors.white,
+      appBar: AppBar(title: Text('Subject Data')),
+      body: isLoading
+          ? Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: EdgeInsets.all(16.0), // Removed 'const' here
+              child: Column(
+                children: [
+                  // Action Buttons
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      ElevatedButton(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => FormScreen()),
+                        ).then((_) => _loadLocalData()),
+                        child: Text('Add Subject'),
+                      ),
+                      ElevatedButton(
+                        onPressed: _loadLocalData,
+                        child: Text('Load Local Data'),
+                      ),
+                      ElevatedButton(
+                        onPressed: _loadApiData,
+                        child: Text('Load API Data'),
+                      ),
+                      ElevatedButton(
+                        onPressed: _eraseData,
+                        child: Text('Erase Local Data'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
                         ),
                       ),
-                    )
-                    : ListView.builder(
-                      itemCount: records.length,
-                      itemBuilder: (context, index) {
-                        final record = records[index];
-                        return Dismissible(
-                          key: Key(record['id'].toString()),
-                          direction: DismissDirection.endToStart,
-                          onDismissed:
-                              (direction) => deleteRecord(record['id']),
-                          background: Container(
-                            color: Colors.red,
-                            alignment: Alignment.centerRight,
-                            padding: EdgeInsets.only(right: 20),
-                            child: Icon(
-                              Icons.delete,
-                              color: Colors.white,
-                              size: 30,
+                    ],
+                  ),
+                  SizedBox(height: 20),
+                  // Data Display
+                  Expanded(
+                    child: DefaultTabController(
+                      length: 2,
+                      child: Column(
+                        children: [
+                          TabBar(
+                            tabs: [
+                              Tab(text: 'Your Subjects (${formData.length})'),
+                              Tab(text: 'API Data (${apiData.length})'),
+                            ],
+                          ),
+                          Expanded(
+                            child: TabBarView(
+                              children: [
+                                _buildDataList(formData),
+                                _buildDataList(apiData),
+                              ],
                             ),
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            child: Card(
-                              color: Colors.deepPurple,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                              elevation: 5,
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: Colors.tealAccent,
-                                  child: Text(
-                                    record['studentname']![0].toUpperCase(),
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                ),
-                                title: Text(
-                                  record['studentname'] ?? 'Unknown',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  'Marks: ${record['obtainedmarks'] ?? 0}',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                                trailing: IconButton(
-                                  icon: Icon(
-                                    Icons.delete,
-                                    color: Colors.redAccent,
-                                    size: 28,
-                                  ),
-                                  onPressed: () => deleteRecord(record['id']),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                        ],
+                      ),
                     ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildDataList(List<Map<String, dynamic>> data) {
+    if (data.isEmpty) {
+      return Center(child: Text('No data available'));
+    }
+
+    return ListView.builder(
+      itemCount: data.length,
+      itemBuilder: (context, index) {
+        final item = data[index];
+        return Card(
+          margin: EdgeInsets.symmetric(vertical: 4),
+          child: ListTile(
+            title: Text(item['subject']?.toString() ?? 'Unknown Subject'),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Semester: ${item['semester'] ?? 'N/A'}'),
+                Text('Marks: ${item['marks'] ?? 'N/A'}'),
+                Text('Credits: ${item['creditHours'] ?? 'N/A'}'),
+                Text('Grade: ${item['grade'] ?? 'N/A'}'),
+              ],
+            ),
+            trailing: Text('${item['percentage']?.toStringAsFixed(1) ?? 'N/A'}%'),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
