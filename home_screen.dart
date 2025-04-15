@@ -1,165 +1,130 @@
-// home_screen.dart
 import 'package:flutter/material.dart';
-import 'db_helper.dart';
-import 'form_screen.dart';
-import 'api_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../firebase_service/firebase_service.dart';
 
 class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<Map<String, dynamic>> formData = [];
-  List<Map<String, dynamic>> apiData = [];
-  bool isLoading = false;
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController degreeController = TextEditingController();
+  final FirebaseService firebaseService = FirebaseService();
 
   @override
-  void initState() {
-    super.initState();
-    _loadLocalData();
-  }
-
-  Future<void> _loadLocalData() async {
-    setState(() => isLoading = true);
-    try {
-      formData = await DbHelper.fetchSubjectData();
-      setState(() {});
-    } catch (e) {
-      _showError('Error loading local data: $e');
-    } finally {
-      setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> _loadApiData() async {
-    setState(() => isLoading = true);
-    try {
-      apiData = await ApiService.fetchData();
-      setState(() {});
-      _showSuccess('API data loaded successfully');
-    } catch (e) {
-      _showError('Error loading API data: $e');
-    } finally {
-      setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> _eraseData() async {
-    await DbHelper.deleteAllData();
-    setState(() => formData = []);
-    _showSuccess('All local data erased');
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+  void dispose() {
+    nameController.dispose();
+    degreeController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Subject Data')),
-      body: isLoading
-          ? Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: EdgeInsets.all(16.0), // Removed 'const' here
-              child: Column(
-                children: [
-                  // Action Buttons
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      ElevatedButton(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => FormScreen()),
-                        ).then((_) => _loadLocalData()),
-                        child: Text('Add Subject'),
-                      ),
-                      ElevatedButton(
-                        onPressed: _loadLocalData,
-                        child: Text('Load Local Data'),
-                      ),
-                      ElevatedButton(
-                        onPressed: _loadApiData,
-                        child: Text('Load API Data'),
-                      ),
-                      ElevatedButton(
-                        onPressed: _eraseData,
-                        child: Text('Erase Local Data'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 20),
-                  // Data Display
-                  Expanded(
-                    child: DefaultTabController(
-                      length: 2,
-                      child: Column(
-                        children: [
-                          TabBar(
-                            tabs: [
-                              Tab(text: 'Your Subjects (${formData.length})'),
-                              Tab(text: 'API Data (${apiData.length})'),
-                            ],
-                          ),
-                          Expanded(
-                            child: TabBarView(
-                              children: [
-                                _buildDataList(formData),
-                                _buildDataList(apiData),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+      appBar: AppBar(
+        title: const Text("Firestore CRUD App"),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Name'),
             ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: degreeController,
+              decoration: const InputDecoration(labelText: 'Degree'),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _submitData,
+              child: const Text("Submit"),
+            ),
+            const SizedBox(height: 20),
+            const Divider(),
+            const Text("Submitted Users", style: TextStyle(fontSize: 18)),
+            const SizedBox(height: 10),
+            _buildUserList(),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildDataList(List<Map<String, dynamic>> data) {
-    if (data.isEmpty) {
-      return Center(child: Text('No data available'));
+  Future<void> _submitData() async {
+    final name = nameController.text.trim();
+    final degree = degreeController.text.trim();
+
+    if (name.isEmpty || degree.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all fields')),
+      );
+      return;
     }
 
-    return ListView.builder(
-      itemCount: data.length,
-      itemBuilder: (context, index) {
-        final item = data[index];
-        return Card(
-          margin: EdgeInsets.symmetric(vertical: 4),
-          child: ListTile(
-            title: Text(item['subject']?.toString() ?? 'Unknown Subject'),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Semester: ${item['semester'] ?? 'N/A'}'),
-                Text('Marks: ${item['marks'] ?? 'N/A'}'),
-                Text('Credits: ${item['creditHours'] ?? 'N/A'}'),
-                Text('Grade: ${item['grade'] ?? 'N/A'}'),
-              ],
-            ),
-            trailing: Text('${item['percentage']?.toStringAsFixed(1) ?? 'N/A'}%'),
-          ),
-        );
-      },
+    try {
+      await firebaseService.add(name, degree);
+      nameController.clear();
+      degreeController.clear();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    }
+  }
+
+  Widget _buildUserList() {
+    return Expanded(
+      child: StreamBuilder<QuerySnapshot>(
+        stream: firebaseService.getUsersStream(), // Use service method
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("No data found."));
+          }
+
+          return ListView.builder(
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              final doc = snapshot.data!.docs[index];
+              final data = doc.data() as Map<String, dynamic>;
+
+              return ListTile(
+                leading: const Icon(Icons.person),
+                title: Text(data['name'] ?? ''),
+                subtitle: Text(data['degree'] ?? ''),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () => _deleteUser(doc.id),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
+  }
+
+  Future<void> _deleteUser(String id) async {
+    try {
+      await firebaseService.delete(id);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting: ${e.toString()}')),
+      );
+    }
   }
 }
