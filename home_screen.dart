@@ -1,130 +1,90 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../firebase_service/firebase_service.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class HomeScreen extends StatelessWidget {
+  final List<Map<String, dynamic>> records;
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController degreeController = TextEditingController();
-  final FirebaseService firebaseService = FirebaseService();
-
-  @override
-  void dispose() {
-    nameController.dispose();
-    degreeController.dispose();
-    super.dispose();
-  }
+  HomeScreen({required this.records});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Firestore CRUD App"),
-        centerTitle: true,
+      appBar: AppBar(title: Text('Home')),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text(
+                'Navigation Menu',
+                style: TextStyle(color: Colors.white, fontSize: 24),
+              ),
+            ),
+            ListTile(
+              title: Text('Home'),
+              onTap: () => Navigator.pushNamed(context, '/home'),
+            ),
+            ListTile(
+              title: Text('Flag Task'),
+              onTap: () => Navigator.pushNamed(context, '/flag'),
+            ),
+            ListTile(
+              title: Text('Student Info'),
+              onTap: () => Navigator.pushNamed(context, '/studentInfo'),
+            ),
+          ],
+        ),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(16.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
+            Image.asset('assets/images/pic.png', height: 150),
+            SizedBox(height: 16),
+            Text(
+              'Enrolled Subjects:',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: degreeController,
-              decoration: const InputDecoration(labelText: 'Degree'),
+            SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                itemCount: records.length,
+                itemBuilder: (context, index) {
+                  final record = records[index];
+                  return SubjectTile(
+                    subject: record['subject'],
+                    teacher: record['teacher'],
+                    credit: record['credit'],
+                  );
+                },
+              ),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _submitData,
-              child: const Text("Submit"),
-            ),
-            const SizedBox(height: 20),
-            const Divider(),
-            const Text("Submitted Users", style: TextStyle(fontSize: 18)),
-            const SizedBox(height: 10),
-            _buildUserList(),
           ],
         ),
       ),
     );
   }
+}
 
-  Future<void> _submitData() async {
-    final name = nameController.text.trim();
-    final degree = degreeController.text.trim();
+class SubjectTile extends StatelessWidget {
+  final String subject;
+  final String teacher;
+  final int credit;
 
-    if (name.isEmpty || degree.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all fields')),
-      );
-      return;
-    }
+  const SubjectTile({
+    required this.subject,
+    required this.teacher,
+    required this.credit,
+  });
 
-    try {
-      await firebaseService.add(name, degree);
-      nameController.clear();
-      degreeController.clear();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
-    }
-  }
-
-  Widget _buildUserList() {
-    return Expanded(
-      child: StreamBuilder<QuerySnapshot>(
-        stream: firebaseService.getUsersStream(), // Use service method
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No data found."));
-          }
-
-          return ListView.builder(
-            itemCount: snapshot.data!.docs.length,
-            itemBuilder: (context, index) {
-              final doc = snapshot.data!.docs[index];
-              final data = doc.data() as Map<String, dynamic>;
-
-              return ListTile(
-                leading: const Icon(Icons.person),
-                title: Text(data['name'] ?? ''),
-                subtitle: Text(data['degree'] ?? ''),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => _deleteUser(doc.id),
-                ),
-              );
-            },
-          );
-        },
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        title: Text(subject),
+        subtitle: Text('Teacher: $teacher\nCredits: $credit'),
       ),
     );
-  }
-
-  Future<void> _deleteUser(String id) async {
-    try {
-      await firebaseService.delete(id);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting: ${e.toString()}')),
-      );
-    }
   }
 }
