@@ -1,123 +1,119 @@
+// main.dart
 import 'package:flutter/material.dart';
-import 'package:path/path.dart';
-import 'package:sqflite/sqflite.dart';
+import 'flag_task_screen.dart';
+import 'flag_image_screen.dart';
+import 'student_info_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-  
+class MyApp extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SQLite Demo',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const HomeScreen(),
-    );
-  }
+  State<MyApp> createState() => _MyAppState();
 }
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
-  
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
+class _MyAppState extends State<MyApp> {
+  static List<Map<String, dynamic>> studentRecords = [
+    {'subject': 'Math', 'teacher': 'Mr. Ali', 'credit': 3},
+    {'subject': 'Physics', 'teacher': 'Ms. Sara', 'credit': 4},
+    {'subject': 'CS', 'teacher': 'Dr. Ahmad', 'credit': 3},
+  ];
 
-class _HomeScreenState extends State<HomeScreen> {
-  late Database database;
-  final TextEditingController _controller = TextEditingController();
-  List<Map<String, dynamic>> records = [];
-
-  @override
-  void initState() {
-    super.initState();
-    initDB();
-  }
-
-  Future<void> initDB() async {
-    String path = join(await getDatabasesPath(), 'my_database.db');
-    database = await openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute(
-          'CREATE TABLE texts(id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT)',
-        );
-      },
-    );
-    await fetchRecords();
-  }
-
-  Future<void> fetchRecords() async {
-    final List<Map<String, dynamic>> maps = await database.query('texts');
+  void addStudentRecord(String subject, String teacher, int credit) {
     setState(() {
-      records = maps;
+      studentRecords.add({'subject': subject, 'teacher': teacher, 'credit': credit});
     });
   }
 
-  Future<void> insertRecord(String text) async {
-    await database.insert(
-      'texts',
-      {'content': text},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-    await fetchRecords();
-  }
-
   @override
-  void dispose() {
-    _controller.dispose();
-    database.close();
-    super.dispose();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Multi Screen App',
+      home: HomeScreen(records: studentRecords),
+      routes: {
+        '/home': (_) => HomeScreen(records: studentRecords),
+        '/flag': (_) => FlagTaskScreen(),
+        '/studentInfo': (_) => StudentInfoScreen(onSubmit: addStudentRecord),
+      },
+    );
   }
+}
+
+class HomeScreen extends StatelessWidget {
+  final List<Map<String, dynamic>> records;
+
+  HomeScreen({required this.records});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('SQLite Text Storage'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+      appBar: AppBar(title: Text('Home'), actions: []),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
           children: [
-            TextField(
-              controller: _controller,
-              decoration: const InputDecoration(
-                labelText: 'Enter text',
-                border: OutlineInputBorder(),
-              ),
+            DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text('Navigation Menu', style: TextStyle(color: Colors.white, fontSize: 24)),
             ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () async {
-                final text = _controller.text.trim();
-                if (text.isNotEmpty) {
-                  await insertRecord(text);
-                  _controller.clear();
-                }
-              },
-              child: const Text('Submit'),
+            ListTile(
+              title: Text('Home'),
+              onTap: () => Navigator.pushNamed(context, '/home'),
             ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: records.isEmpty
-                  ? const Center(child: Text('No records yet'))
-                  : ListView.builder(
-                      itemCount: records.length,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                          leading: Text(records[index]['id'].toString()),
-                          title: Text(records[index]['content']),
-                        );
-                      },
-                    ),
+            ListTile(
+              title: Text('Flag Task'),
+              onTap: () => Navigator.pushNamed(context, '/flag'),
+            ),
+            ListTile(
+              title: Text('Student Info'),
+              onTap: () => Navigator.pushNamed(context, '/studentInfo'),
             ),
           ],
         ),
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Image.asset('assets/images/pic.png', height: 150),
+            SizedBox(height: 16),
+            Text('Enrolled Subjects:', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                itemCount: records.length,
+                itemBuilder: (context, index) {
+                  final record = records[index];
+                  return SubjectTile(
+                    subject: record['subject'],
+                    teacher: record['teacher'],
+                    credit: record['credit'],
+                  );
+                },
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SubjectTile extends StatelessWidget {
+  final String subject, teacher;
+  final int credit;
+
+  const SubjectTile({required this.subject, required this.teacher, required this.credit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        title: Text(subject),
+        subtitle: Text('Teacher: $teacher\nCredits: $credit'),
       ),
     );
   }
